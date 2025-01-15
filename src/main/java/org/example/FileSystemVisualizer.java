@@ -1,6 +1,8 @@
 package org.example;
 
 import javafx.application.Application;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
@@ -12,10 +14,11 @@ import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.Circle;
+import javafx.scene.text.Font;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
+import org.example.DAO.OrientDBFileTagSystem;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,7 +43,6 @@ public class FileSystemVisualizer extends Application {
     private Stack<String> directoryStack = new Stack<>(); // Стек для хранения истории директорий
     private double centerX;
     private double centerY;
-    private double radius;
     private static double offsetX = 0; // Смещение по X
     private static double offsetY = 0; // Смещение по Y
     private double mouseStartX; // Начальная позиция мыши по X
@@ -56,7 +58,7 @@ public class FileSystemVisualizer extends Application {
     private static double zoomCenterX; // Координата центра масштабирования по X
     private static double zoomCenterY; // Координата центра масштабирования по Y
     private static FileNode selectedFileNode;
-    private ListView<String> folderListView = new ListView<>();
+    private TableView<FileNode> tableView = new TableView<>();
     private static BorderPane root = new BorderPane();
     private static String directory;
     private Stage myPrimaryStage;
@@ -116,10 +118,16 @@ public class FileSystemVisualizer extends Application {
 
     @Override
     public void start(Stage primaryStage) throws IOException {
+        Font.loadFont(getClass().getResourceAsStream("/fonts/Roboto-Light.ttf"), 14);
+        Font.loadFont(getClass().getResourceAsStream("/fonts/Roboto-Bold.ttf"), 14);
+        Font.loadFont(getClass().getResourceAsStream("/fonts/Roboto-Regular.ttf"), 14);
+
         myPrimaryStage = primaryStage;
         directory = getDesktopPath().toString();
         directoryStack.push(directory);
+
         Pane rootPane = new Pane();
+        rootPane.getStyleClass().add("root");
 
         createFilesPane(directory);
         HBox searchBox = createSearchPane();
@@ -128,7 +136,6 @@ public class FileSystemVisualizer extends Application {
         gc = canvas.getGraphicsContext2D();
         centerX = canvas.getWidth() / 2;
         centerY = canvas.getHeight() / 2;
-        radius = Math.min(canvas.getWidth(), canvas.getHeight()) / 3;
 
         updateFiles(directory);
 
@@ -139,6 +146,8 @@ public class FileSystemVisualizer extends Application {
         VBox mainBox = createMainBox(searchBox, root, rootPane);
         // Создаем сцену и устанавливаем ее на основную сцену
         Scene scene = new Scene(mainBox, 1200, 600);
+
+        scene.getStylesheets().add(getClass().getResource("/telegram.css").toExternalForm());
         primaryStage.setTitle("File System Visualizer");
         primaryStage.setScene(scene);
         primaryStage.show();
@@ -150,11 +159,6 @@ public class FileSystemVisualizer extends Application {
     }
 
     private BorderPane createFilesPane(String path){
-        Button upButton = new Button("Вверх");
-        Button backButton = new Button("Назад");
-
-        TableView<FileNode> tableView = new TableView<>();
-
         TableColumn<FileNode, String> pathColumn = new TableColumn<>("Путь");
         pathColumn.setCellValueFactory(new PropertyValueFactory<>("file"));
 
@@ -165,21 +169,14 @@ public class FileSystemVisualizer extends Application {
         tableView.getColumns().add(tagColumn);
 
         System.out.println("ОТОБРАЖЕНИЕ ДИРРЕКТОРИИ: " + path);
-        updateFiles(path);
         tableView.getItems().addAll(fileNodes);
-
         root.setCenter(tableView);
-        // root.setRight(tags);
-
-        HBox bBox = new HBox(10, upButton, backButton);
-        bBox.setAlignment(Pos.CENTER);
-        bBox.setPadding(new Insets(10));
-        root.setBottom(bBox);
         return root;
     }
 
     private Canvas createCanvas(){
         Canvas canvas = new Canvas(800, 600);
+        canvas.getStyleClass().add("canvas");
 
         // Обработка нажатия кнопки мыши для начала перетаскивания
         canvas.setOnMousePressed(event -> {
@@ -271,7 +268,8 @@ public class FileSystemVisualizer extends Application {
         searchBox.setPadding(new Insets(10));
 
         TextField searchField = new TextField();
-        searchField.setPromptText("Введите имя файла или каталога...");
+        searchField.setPromptText("Введите путь или название тэга...");
+        searchField.setMinWidth(300);
 
         Button searchButton = new Button("Поиск");
         searchButton.setOnAction(e -> {
@@ -290,8 +288,8 @@ public class FileSystemVisualizer extends Application {
     private Pane createInfoPane(){
         infoPane = new Pane();
         infoPane.setVisible(false);
-        infoPane.setPrefWidth(200);
-        infoPane.setStyle("-fx-background-color: white; -fx-border-color: black;");
+        infoPane.setPrefWidth(400);
+        infoPane.getStyleClass().add("infoPane");
         infoPane.setPadding(new Insets(10));
         // Создаем метки для информации о файле
         fileNameLabel = new Label();
@@ -440,6 +438,13 @@ public class FileSystemVisualizer extends Application {
         List<String> tags = parseTags(tagsField.getText());
         // Обработка сохранения имени и тегов (здесь необходима логика сохранения)
         if (selectedFileNode != null) {
+            if (selectedFileNode.tags.isEmpty()){
+                OrientDBFileTagSystem.addFile(selectedFileNode.getFile().getPath(), (ArrayList<String>) tags);
+            } else {
+                for (String tag: tags){
+                    OrientDBFileTagSystem.addTagToFile(selectedFileNode.getFile().getPath(), tag);
+                }
+            }
             selectedFileNode.tags = (ArrayList<String>) tags;
             dialogStage.close();
         } else {
@@ -480,7 +485,6 @@ public class FileSystemVisualizer extends Application {
         directoryStack.push(directoryPath); // Сохраняем текущую директорию в стек
         updateFiles(directoryPath);
         draw(gc);
-        createFilesPane(directoryPath);
     }
 
     private void goBack() {
@@ -488,7 +492,6 @@ public class FileSystemVisualizer extends Application {
             String previousDirectory = directoryStack.pop(); // Удаляем текущую директорию из стека
             directory = directoryStack.peek();
             updateFiles(directoryStack.peek());
-            createFilesPane(directoryStack.peek());
             draw(gc);
         }
     }
@@ -500,7 +503,8 @@ public class FileSystemVisualizer extends Application {
         mf.add(new FileNode(new File(directoryPath)));
         if (files != null) {
             for (int i = 0; i < files.length; i++) {
-                mf.add(new FileNode(new File(files[i].getPath())));
+                FileNode fileNode = new FileNode(new File(files[i].getPath()));
+                mf.add(fileNode);
             }
         }
         return mf;
@@ -526,9 +530,16 @@ public class FileSystemVisualizer extends Application {
                 double angle = (2 * Math.PI / files.length) * i;
                 double x = centerX + distanceFactor * Math.cos(angle) + offsetX;
                 double y = centerY + distanceFactor * Math.sin(angle) + offsetY;
-                fileNodes.add(new FileNode(files[i], x, y, false));
+
+                FileNode fileNode = new FileNode(files[i], x, y, false);
+                fileNode.tags = OrientDBFileTagSystem.getTagsByPath(files[i].getPath());
+                fileNodes.add(fileNode);
+
             }
         }
+        tableView.getItems().clear();
+        ObservableList<FileNode> observableFileNodes = FXCollections.observableArrayList(fileNodes);
+        tableView.setItems(observableFileNodes);
     }
 
     private void draw(GraphicsContext gc) {
@@ -540,14 +551,9 @@ public class FileSystemVisualizer extends Application {
         gc.setFill(Color.web("#2b2d30"));
         gc.fillRect(centerX - canvas.getWidth() * 2, centerY - canvas.getHeight() * 2, canvas.getWidth() * 10, canvas.getHeight() * 10);
 
-        // Рисуем кружок для начальной директории
         FileNode rootNode = fileNodes.get(0);
-        gc.setFill(rootNode.getColor());
-
         adjustedX = (rootNode.getX() + offsetX - zoomCenterX) * zoomLevel + zoomCenterX;
         adjustedY = (rootNode.getY() + offsetY - zoomCenterY) * zoomLevel + zoomCenterY;
-        gc.fillOval(adjustedX, adjustedY, 30 * zoomLevel, 30 * zoomLevel);
-        gc.fillText(rootNode.getFile().getName(), adjustedX, adjustedY - 10 * zoomLevel);
 
         for (int i = 1; i < fileNodes.size(); i++) { // Начинаем с 1, чтобы пропустить корневую директорию
             FileNode node = fileNodes.get(i);
@@ -568,6 +574,10 @@ public class FileSystemVisualizer extends Application {
             gc.fillOval(nodeX, nodeY, 30 * zoomLevel, 30 * zoomLevel);
             gc.fillText(node.getFile().getName(), nodeX, nodeY - 10 * zoomLevel);
         }
+        // Рисуем кружок для начальной директории
+        gc.setFill(rootNode.getColor());
+        gc.fillOval(adjustedX, adjustedY, 30 * zoomLevel, 30 * zoomLevel);
+        gc.fillText(rootNode.getFile().getName(), adjustedX, adjustedY - 10 * zoomLevel);
     }
 
     private void showFileInfo(FileNode node) {
@@ -580,14 +590,19 @@ public class FileSystemVisualizer extends Application {
 
             // Обновляем метки с информацией о файле
             fileNameLabel.setText("Имя файла: " + file.getName());
+            fileNameLabel.setStyle("-fx-text-fill: white; -fx-padding: 10px");
             filePathLabel.setText("\nПолный путь: " + file.getAbsolutePath());
+            filePathLabel.setStyle("-fx-text-fill: white; -fx-padding: 10px");
             fileSizeLabel.setText("\n\nРазмер: " + file.length() + " байт");
+            fileSizeLabel.setStyle("-fx-text-fill: white; -fx-padding: 10px");
             creationDateLabel.setText("\n\n\nДата создания: " + dateFormat.format(new Date(attributes.creationTime().toMillis())));
+            creationDateLabel.setStyle("-fx-text-fill: #b4b4b4; -fx-padding: 10px");
             modificationDateLabel.setText("\n\n\n\nДата последней модификации: " + dateFormat.format(new Date(attributes.lastModifiedTime().toMillis())));
+            modificationDateLabel.setStyle("-fx-text-fill: #b4b4b4; -fx-padding: 10px");
 
 
-            infoPane.setLayoutX(node.getX() + offsetX + 35);
-            infoPane.setLayoutY(node.getY() + offsetY);
+            infoPane.setLayoutX(canvas.getWidth() - 400);
+            infoPane.setLayoutY(0);
             // Делаем панель видимой
             infoPane.setVisible(true);
             infoPane.toFront();

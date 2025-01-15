@@ -67,7 +67,7 @@ public class FileNode {
     }
 
     public Color getColor() {
-        return isSelected ? Color.BLUE : Color.GRAY;
+        return isSelected ? Color.web("#007bff") : Color.GRAY;
     }
 
     public boolean containsPoint(double x, double y, double offsetX, double offsetY, double zoomLevel) {
