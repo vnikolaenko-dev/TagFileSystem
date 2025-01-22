@@ -1,5 +1,7 @@
 package org.example;
 
+import com.orientechnologies.orient.core.db.ODatabaseDocumentInternal;
+import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
 import javafx.application.Application;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -9,7 +11,11 @@ import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.*;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextField;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.image.Image;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.*;
@@ -20,6 +26,7 @@ import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import org.example.DAO.OrientDBFileTagSystem;
 
+import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -28,6 +35,10 @@ import java.nio.file.Paths;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
 import java.util.*;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import static org.example.DAO.OrientDBFileTagSystem.db;
 
 
 // todo поток который будет следить за файлами в текущей дирректории
@@ -62,6 +73,8 @@ public class FileSystemVisualizer extends Application {
     private static BorderPane root = new BorderPane();
     private static String directory;
     private Stage myPrimaryStage;
+    private HashSet<String> tags = OrientDBFileTagSystem.getTags();
+    private ObservableList<String> availableTags;
 
     public static void main(String[] args) {
         launch(args);
@@ -86,28 +99,32 @@ public class FileSystemVisualizer extends Application {
         }
 
         // Проверка на существование папки
-        if (!Files.exists(desktopPath) ) {
+        if (!Files.exists(desktopPath)) {
             throw new IOException("Папка рабочего стола не найдена");
         }
 
         return desktopPath;
     }
 
-    public void checkDir(){
+    public void checkDir() {
+        ODatabaseRecordThreadLocal.instance().set((ODatabaseDocumentInternal) db);
         while (true) {
             try {
                 Thread.sleep(1000);
+                if (tags.contains(directory)) {
+                    continue;
+                }
                 ArrayList<FileNode> updatedListOfFiles = loadFiles(directory);
                 for (FileNode myFile : updatedListOfFiles) {
                     if (!fileNodes.contains(myFile)) {
-                        System.out.println("ОБНУРАЖЕНО ИЗМЕНЕНИЕ");
-                        updateFiles(directory);
+                        System.out.println("ОБНУРАЖЕНО ИЗМЕНЕНИЕ В ДИРРЕКТОРИИ");
+                        updateFiles(directory, new File(directory).listFiles());
                     }
                 }
                 for (FileNode myFile : fileNodes) {
                     if (!updatedListOfFiles.contains(myFile)) {
-                        System.out.println("ОБНУРАЖЕНО ИЗМЕНЕНИЕ");
-                        updateFiles(directory);
+                        System.out.println("ОБНУРАЖЕНО ИЗМЕНЕНИЕ " + myFile.getFile().getName());
+                        updateFiles(directory, new File(directory).listFiles());
                     }
                 }
             } catch (Exception e) {
@@ -121,6 +138,8 @@ public class FileSystemVisualizer extends Application {
         Font.loadFont(getClass().getResourceAsStream("/fonts/Roboto-Light.ttf"), 14);
         Font.loadFont(getClass().getResourceAsStream("/fonts/Roboto-Bold.ttf"), 14);
         Font.loadFont(getClass().getResourceAsStream("/fonts/Roboto-Regular.ttf"), 14);
+
+        primaryStage.getIcons().add(new Image(getClass().getResourceAsStream("/static/logo.png")));
 
         myPrimaryStage = primaryStage;
         directory = getDesktopPath().toString();
@@ -137,7 +156,7 @@ public class FileSystemVisualizer extends Application {
         centerX = canvas.getWidth() / 2;
         centerY = canvas.getHeight() / 2;
 
-        updateFiles(directory);
+        updateFiles(directory, new File(directory).listFiles());
 
         rootPane.getChildren().add(canvas);
         rootPane.getChildren().add(createInfoPane());
@@ -147,7 +166,7 @@ public class FileSystemVisualizer extends Application {
         // Создаем сцену и устанавливаем ее на основную сцену
         Scene scene = new Scene(mainBox, 1200, 600);
 
-        scene.getStylesheets().add(getClass().getResource("/telegram.css").toExternalForm());
+        scene.getStylesheets().add(getClass().getResource("/static/style.css").toExternalForm());
         primaryStage.setTitle("File System Visualizer");
         primaryStage.setScene(scene);
         primaryStage.show();
@@ -158,7 +177,7 @@ public class FileSystemVisualizer extends Application {
         checker.start();
     }
 
-    private BorderPane createFilesPane(String path){
+    private BorderPane createFilesPane(String path) {
         TableColumn<FileNode, String> pathColumn = new TableColumn<>("Путь");
         pathColumn.setCellValueFactory(new PropertyValueFactory<>("file"));
 
@@ -174,7 +193,7 @@ public class FileSystemVisualizer extends Application {
         return root;
     }
 
-    private Canvas createCanvas(){
+    private Canvas createCanvas() {
         Canvas canvas = new Canvas(800, 600);
         canvas.getStyleClass().add("canvas");
 
@@ -263,7 +282,7 @@ public class FileSystemVisualizer extends Application {
         return canvas;
     }
 
-    private HBox createSearchPane(){
+    private HBox createSearchPane() {
         HBox searchBox = new HBox(10); // Отступы между элементами
         searchBox.setPadding(new Insets(10));
 
@@ -273,8 +292,14 @@ public class FileSystemVisualizer extends Application {
 
         Button searchButton = new Button("Поиск");
         searchButton.setOnAction(e -> {
+            offsetX = 0;
+            offsetY = 0;
             String searchQuery = searchField.getText();
+            if (tags.contains(searchQuery)) {
+                showFilesByTag(searchQuery);
+            }
             goToDirectory(searchQuery); // Метод для выполнения поиска
+            draw(gc);
         });
 
         Button backButton = new Button("Назад");
@@ -285,7 +310,7 @@ public class FileSystemVisualizer extends Application {
     }
 
     // Информация о точке
-    private Pane createInfoPane(){
+    private Pane createInfoPane() {
         infoPane = new Pane();
         infoPane.setVisible(false);
         infoPane.setPrefWidth(400);
@@ -302,30 +327,47 @@ public class FileSystemVisualizer extends Application {
     }
 
 
-    private VBox createWorkPane(){
+    private VBox createWorkPane() {
         // Кнопки для работы с файлами
-        Button createFileButton = new Button("Создать файл");
-        createFileButton.setOnAction(e -> createFile()); // Метод для создания файла
+        Button createFileButton = new Button("Редактировать тэги");
+        createFileButton.setOnAction(e -> editTag()); // Метод для создания файла
 
         Button editFileButton = new Button("Редактировать файл");
         editFileButton.setOnAction(e -> editFile()); // Метод для редактирования файла
 
-        /*
-        Button addTagButton = new Button("Добавить тег");
-        addTagButton.setOnAction(e -> addTag()); // Метод для добавления тега
-         */
+        Button openFileButton = new Button("Открыть файл");
+        openFileButton.setOnAction(e -> openFile()); // Метод для редактирования файла
 
         // Создаем VBox для кнопок и настраиваем его
         VBox buttonBox = new VBox(10); // 10 - отступ между кнопками
-        buttonBox.getChildren().addAll(createFileButton, editFileButton);
-        // buttonBox.setStyle("-fx-background-color: rgba(255, 255, 255, 0.8);"); // Полупрозрачный фон кнопок
+        buttonBox.getChildren().addAll(createFileButton, editFileButton, openFileButton);
         buttonBox.setMinWidth(150); // Ширина бокса с кнопками
         buttonBox.setAlignment(Pos.BOTTOM_LEFT); // Выравнивание по правой стороне
 
         return buttonBox;
     }
 
-    private VBox createMainBox(HBox searchBox, BorderPane root, Pane rootPane){
+    private void openFile() {
+        try {
+            File selectedFile = selectedFileNode.getFile();
+            Desktop desktop = Desktop.getDesktop();
+
+            if (selectedFile.isDirectory()) {
+                desktop.open(selectedFile);  // Открывает проводник в указанной директории
+
+            } else {
+                String path = selectedFile.getAbsolutePath();
+                String command = "explorer.exe /select," + path;
+                Process process = Runtime.getRuntime().exec(command);  // Выполняем команду
+                process.waitFor();   // Открывает директорию, где находится файл
+            }
+        } catch (Exception e) {
+            System.out.println(e.getMessage());
+        }
+    }
+
+
+    private VBox createMainBox(HBox searchBox, BorderPane root, Pane rootPane) {
         HBox.setHgrow(searchBox, Priority.ALWAYS);
         // Создаем VBox для размещения корневого элемента и информационной метки
         VBox mainBox = new VBox();
@@ -367,7 +409,7 @@ public class FileSystemVisualizer extends Application {
         vbox.setAlignment(Pos.CENTER);
 
         String tags = "";
-        for(String tag: selectedFileNode.tags){
+        for (String tag : selectedFileNode.tags) {
             tags += tag + ", ";
         }
         Label fileLabel = new Label("Имя файла: " + selectedFileNode.getFile().getName());
@@ -379,7 +421,8 @@ public class FileSystemVisualizer extends Application {
         addButton.setOnAction(e -> {
             selectedFileNode.tags.add(tagField.getText());
             popupStage.close();
-            updateFiles(selectedFileNode.getFile().getAbsolutePath());});
+            updateFiles(selectedFileNode.getFile().getAbsolutePath(), new File(selectedFileNode.getFile().getAbsolutePath()).listFiles());
+        });
         vbox.getChildren().addAll(fileLabel, tagsLabel, tagLabel, tagField, addButton);
         Scene scene = new Scene(vbox);
         popupStage.setScene(scene);
@@ -387,45 +430,67 @@ public class FileSystemVisualizer extends Application {
     }
 
     private void editFile() {
-        if (selectedFileNode != null){
+        if (selectedFileNode != null) {
             Stage dialogStage = new Stage();
             dialogStage.setTitle("Редактор файла");
-            dialogStage.initModality(Modality.APPLICATION_MODAL);
+            // dialogStage.initModality(Modality.APPLICATION_MODAL);
 
             GridPane grid = new GridPane();
             grid.setHgap(10);
             grid.setVgap(10);
             grid.setPadding(new Insets(10));
 
+            grid.getStyleClass().add("root");
+
             // Информация о файле
-            Label nameLabel = new Label("Имя файла:" );
+            Label nameLabel = new Label("Имя файла:");
             Label nameValue = new Label(selectedFileNode.getFile().getName());
             Label pathLabel = new Label("Путь:");
             Label pathValue = new Label(selectedFileNode.getFile().getAbsolutePath());
             Label sizeLabel = new Label("Размер:");
             Label sizeValue = new Label(getFileSize(selectedFileNode.getFile()));
-            Label lastModifiedLabel = new Label("Дата изменения:");
-            // Label lastModifiedValue = new Label(getLastModifiedDate(selectedFileNode));
 
             grid.addRow(0, nameLabel, nameValue);
             grid.addRow(1, pathLabel, pathValue);
-            grid.addRow(2, sizeLabel, sizeValue);
-            // grid.addRow(3, lastModifiedLabel, lastModifiedValue);
 
-            // Теги
-            Label tagsLabel = new Label("Теги (через запятую):");
-            TextField tagsField = new TextField(selectedFileNode.tags.toString()); //Начальное значение тегов
+            if (selectedFileNode.getFile().isFile()){
+                grid.addRow(2, sizeLabel, sizeValue);
+            }
+
+
+            ListView<String> tagsListView = new ListView<>();
+            ObservableList<String> availableTags = FXCollections.observableArrayList(tags); // tags - ваш список тегов
+            tagsListView.setItems(availableTags);
+
+            // Разрешаем множественный выбор
+            tagsListView.getSelectionModel().setSelectionMode(SelectionMode.MULTIPLE);
+
+            // Устанавливаем начальное значение выбранных тегов (если нужно)
+            if (selectedFileNode != null && selectedFileNode.tags != null) {
+                for (String tag : selectedFileNode.tags) {
+                    int index = availableTags.indexOf(tag);
+                    if (index != -1) {
+                        tagsListView.getSelectionModel().select(index);
+                    }
+                }
+            }
+
+            Label tagsLabel = new Label("Теги:"); // Измененная метка
+            // Получение выбранных тегов (например, по нажатию кнопки "Сохранить")
+            ObservableList<String> selectedTags = tagsListView.getSelectionModel().getSelectedItems();
 
             // Кнопки
             Button saveButton = new Button("Сохранить");
-            saveButton.setOnAction(e -> handleSave(dialogStage, tagsField));
+            saveButton.setOnAction(e -> handleSave(dialogStage, selectedTags));
+            saveButton.setStyle("");
             Button cancelButton = new Button("Отмена");
             cancelButton.setOnAction(e -> dialogStage.close());
 
-            grid.addRow(4, tagsLabel, tagsField);
-            grid.addRow(5, saveButton, cancelButton);
+            grid.addRow(5, tagsLabel, tagsListView);
+            grid.addRow(6, saveButton, cancelButton);
 
             Scene scene = new Scene(grid);
+            scene.getStylesheets().add(getClass().getResource("/static/style.css").toExternalForm());
             dialogStage.setScene(scene);
             dialogStage.show();
         } else {
@@ -434,18 +499,25 @@ public class FileSystemVisualizer extends Application {
 
     }
 
-    private void handleSave(Stage dialogStage, TextField tagsField) {
-        List<String> tags = parseTags(tagsField.getText());
+    private void handleSave(Stage dialogStage, ObservableList<String> tagsFromApp) {
+        ArrayList<String> tags = new ArrayList<>(tagsFromApp);
         // Обработка сохранения имени и тегов (здесь необходима логика сохранения)
         if (selectedFileNode != null) {
-            if (selectedFileNode.tags.isEmpty()){
-                OrientDBFileTagSystem.addFile(selectedFileNode.getFile().getPath(), (ArrayList<String>) tags);
+            if (selectedFileNode.tags.isEmpty()) {
+                OrientDBFileTagSystem.addFile(selectedFileNode.getFile().getPath(), tags);
             } else {
-                for (String tag: tags){
+                for (String tag : tags) {
                     OrientDBFileTagSystem.addTagToFile(selectedFileNode.getFile().getPath(), tag);
                 }
             }
-            selectedFileNode.tags = (ArrayList<String>) tags;
+
+            // Удаляем невыбранные тэги
+            for (String tag : OrientDBFileTagSystem.getTagsByPath(selectedFileNode.getFile().getPath())) {
+                if (!tagsFromApp.contains(tag))
+                    OrientDBFileTagSystem.removeTagFromFile(selectedFileNode.getFile().getPath(), tag);
+            }
+
+            selectedFileNode.tags = tags;
             dialogStage.close();
         } else {
             showErrorAlert("Файл не выбран");
@@ -454,9 +526,21 @@ public class FileSystemVisualizer extends Application {
 
     private void showErrorAlert(String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
+        Scene alertScene = alert.getDialogPane().getScene();
         alert.setTitle("Ошибка: " + message);
         alert.setHeaderText(null);
         alert.setContentText(message);
+        alertScene.getStylesheets().add(getClass().getResource("/static/style.css").toExternalForm());
+        alert.showAndWait();
+    }
+
+    private void showAlert(String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        Scene alertScene = alert.getDialogPane().getScene();
+        alert.setTitle(message);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alertScene.getStylesheets().add(getClass().getResource("/static/style.css").toExternalForm());
         alert.showAndWait();
     }
 
@@ -477,13 +561,86 @@ public class FileSystemVisualizer extends Application {
         return String.valueOf(file.length()) + " байт";
     }
 
-    private void createFile() {
+    private void editTag() {
+        Stage dialogStage = new Stage();
+        dialogStage.setTitle("Создание тэга");
+        // dialogStage.initModality(Modality.APPLICATION_MODAL);
+
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(10));
+
+        ListView<String> tagsListView = new ListView<>();
+        availableTags = FXCollections.observableArrayList(tags); // tags - ваш список тегов
+        tagsListView.setItems(availableTags);
+
+        Label newTag = new Label("Создать новый тэг:");
+        TextField tagField = new TextField();
+        Button addButton = new Button("Создать");
+        addButton.setOnAction(e -> {
+            String tagsText = tagField.getText();
+            List<String> newTags = Arrays.stream(tagsText.split(","))
+                    .map(String::trim)          // Удаляем пробелы вокруг каждого тега
+                    .filter(s -> !s.isEmpty())  // Фильтруем пустые строки
+                    .collect(Collectors.toList());
+            if (OrientDBFileTagSystem.createTags((ArrayList<String>) newTags)) {
+                showAlert("Тэг успешно создан.");
+                updateTagsList();
+            } else {
+                showErrorAlert("Ошибка при создании тэга.");
+            }
+        });
+        grid.addRow(0, newTag);
+        grid.addRow(1, tagField, addButton);
+
+        Label removeTag = new Label("Удалить тэг:");
+        TextField removeTagField = new TextField();
+        Button removeButton = new Button("Удалить");
+        removeButton.setOnAction(e -> {
+            String tagsText = removeTagField.getText();
+            List<String> newTags = Arrays.stream(tagsText.split(","))
+                    .map(String::trim)          // Удаляем пробелы вокруг каждого тега
+                    .filter(s -> !s.isEmpty())  // Фильтруем пустые строки
+                    .collect(Collectors.toList());
+            if (OrientDBFileTagSystem.removeTags((ArrayList<String>) newTags)) {
+                showAlert("Тэг успешно удален.");
+                updateTagsList();
+            } else {
+                showErrorAlert("Ошибка при удалении тэга, проверьте название тэга и повторите попытку.");
+            }
+        });
+        grid.addRow(2, removeTag);
+        grid.addRow(3, removeTagField, removeButton);
+        grid.addRow(4, tagsListView);
+
+        Scene scene = new Scene(grid);
+        scene.getStylesheets().add(getClass().getResource("/static/style.css").toExternalForm());
+        dialogStage.setScene(scene);
+        dialogStage.show();
+    }
+
+    private void updateTagsList() {
+        // Получаем обновленный список тегов из базы данных
+        tags = OrientDBFileTagSystem.getTags();
+        availableTags.setAll(tags); // Обновляем список в ListView
     }
 
     private void goToDirectory(String directoryPath) {
         directory = directoryPath;
         directoryStack.push(directoryPath); // Сохраняем текущую директорию в стек
-        updateFiles(directoryPath);
+        updateFiles(directoryPath, new File(directory).listFiles());
+        draw(gc);
+    }
+
+    private void showFilesByTag(String tag) {
+        ArrayList<String> list = (ArrayList<String>) OrientDBFileTagSystem.searchFilesByTag(tag);
+        File[] filesWithTag = new File[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            filesWithTag[i] = new File(list.get(i));
+        }
+        updateFiles(tag, filesWithTag);
         draw(gc);
     }
 
@@ -491,7 +648,7 @@ public class FileSystemVisualizer extends Application {
         if (!directoryStack.isEmpty()) {
             String previousDirectory = directoryStack.pop(); // Удаляем текущую директорию из стека
             directory = directoryStack.peek();
-            updateFiles(directoryStack.peek());
+            updateFiles(directoryStack.peek(), new File(directory).listFiles());
             draw(gc);
         }
     }
@@ -511,13 +668,12 @@ public class FileSystemVisualizer extends Application {
     }
 
     // todo данные о тэгах должны браться из БД
-    private void updateFiles(String directoryPath) {
+    private void updateFiles(String directoryPath, File[] files) {
         zoomLevel = 1;
         zoomCenterX = 0;
         zoomCenterY = 0;
-        System.out.println(directoryPath);
+
         File directory = new File(directoryPath);
-        File[] files = directory.listFiles();
         if (files != null) {
             fileNodes.clear();
             // Определяем максимальное расстояние от центра
@@ -534,12 +690,15 @@ public class FileSystemVisualizer extends Application {
                 FileNode fileNode = new FileNode(files[i], x, y, false);
                 fileNode.tags = OrientDBFileTagSystem.getTagsByPath(files[i].getPath());
                 fileNodes.add(fileNode);
-
             }
         }
         tableView.getItems().clear();
         ObservableList<FileNode> observableFileNodes = FXCollections.observableArrayList(fileNodes);
         tableView.setItems(observableFileNodes);
+
+        offsetX = 0;
+        offsetY = 0;
+        draw(gc);
     }
 
     private void draw(GraphicsContext gc) {
@@ -593,8 +752,14 @@ public class FileSystemVisualizer extends Application {
             fileNameLabel.setStyle("-fx-text-fill: white; -fx-padding: 10px");
             filePathLabel.setText("\nПолный путь: " + file.getAbsolutePath());
             filePathLabel.setStyle("-fx-text-fill: white; -fx-padding: 10px");
-            fileSizeLabel.setText("\n\nРазмер: " + file.length() + " байт");
-            fileSizeLabel.setStyle("-fx-text-fill: white; -fx-padding: 10px");
+
+            if (file.isFile()){
+                fileSizeLabel.setText("\n\nРазмер: " + file.length() + " байт");
+                fileSizeLabel.setStyle("-fx-text-fill: white; -fx-padding: 10px");
+            } else {
+                fileSizeLabel.setText("");
+            }
+
             creationDateLabel.setText("\n\n\nДата создания: " + dateFormat.format(new Date(attributes.creationTime().toMillis())));
             creationDateLabel.setStyle("-fx-text-fill: #b4b4b4; -fx-padding: 10px");
             modificationDateLabel.setText("\n\n\n\nДата последней модификации: " + dateFormat.format(new Date(attributes.lastModifiedTime().toMillis())));
