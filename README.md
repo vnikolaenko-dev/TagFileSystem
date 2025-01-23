@@ -1,10 +1,10 @@
 # TagFileSystem
 Тэговая файловая система на Java для ОС Windows c визуализацией.
 
-![screen1](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/screen1.jpg)
 Визуализация
-![screen2](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/screen2.jpg)
+![screen1](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/screen1.jpg)
 Редактор файлов и тэгов
+![screen2](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/screen2.jpg)
 
 
 #1. Общее описание
