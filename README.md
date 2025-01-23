@@ -1,8 +1,8 @@
 # TagFileSystem
 Тэговая файловая система на Java для ОС Windows c визуализацией.
 
-![screen1](https://github.com/vnikolaenko-dev/TagFileSystem/tree/main/screenshots/screen1.jpg)
-![screen2](https://github.com/vnikolaenko-dev/TagFileSystem/tree/main/screenshots/screen2.jpg)
+![screen1](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/screen1.jpg)
+![screen2](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/screen2.jpg)
 
 
 #1. Общее описание
