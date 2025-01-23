@@ -1,6 +1,9 @@
 # TagFileSystem
 Тэговая файловая система на Java для ОС Windows c визуализацией.
 
+![screen1](https://github.com/vnikolaenko-dev/TagFileSystem/edit/main/screenshots/screen1.jpg)
+![screen2](https://github.com/vnikolaenko-dev/TagFileSystem/edit/main/screenshots/screen2.jpg)
+
 #1. Общее описание
 - Проект TagFileSystem представляет собой визуализатор файловой системы с использованием тегов для классификации и поиска файлов.
 - Основная цель проекта — предоставить пользователю удобный графический интерфейс для работы с файлами, а также эффективные средства поиска и организации файлов с помощью меток (тегов). 
