@@ -2,7 +2,7 @@
 Тэговая файловая система на Java для ОС Windows c визуализацией.
 
 
-[![asciicast](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/screen1.jpg)](https://disk.yandex.ru/i/UUKO1N4RuV4hMg)
+[![asciicast](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/preview.png)](https://disk.yandex.ru/i/UUKO1N4RuV4hMg)
 
 Визуализация
 ![screen1](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/screen1.jpg)
