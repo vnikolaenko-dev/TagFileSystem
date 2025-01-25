@@ -2,12 +2,8 @@
 Тэговая файловая система на Java для ОС Windows c визуализацией.
 
 
+Демонстрация работы проекта
 [![asciicast](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/preview.png)](https://disk.yandex.ru/i/UUKO1N4RuV4hMg)
-
-Визуализация
-![screen1](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/screen1.jpg)
-Редактор файлов и тэгов
-![screen2](https://github.com/vnikolaenko-dev/TagFileSystem/raw/main/screenshots/screen2.jpg)
 
 
 #1. Общее описание
